@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MNIST — Clasificador de Dígitos Manuscritos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* ─── RESET & VARIABLES ─── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0a0a0f;
+  --surface:   #12121a;
+  --card:      #1a1a26;
+  --border:    #2a2a3e;
+  --accent1:   #7c3aed;
+  --accent2:   #06b6d4;
+  --accent3:   #f59e0b;
+  --text:      #e2e8f0;
+  --muted:     #64748b;
+  --green:     #10b981;
+  --red:       #ef4444;
+  --v1:        #f59e0b;
+  --v2:        #06b6d4;
+  --v3:        #7c3aed;
+  --radius:    12px;
+  --glow1:     0 0 40px rgba(124,58,237,0.3);
+  --glow2:     0 0 40px rgba(6,182,212,0.3);
+}
+
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── BACKGROUND GRID ─── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(124,58,237,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124,58,237,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none; z-index: 0;
+}
+
+/* ─── HEADER ─── */
+header {
+  position: relative; z-index: 10;
+  padding: 40px 32px 24px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(124,58,237,0.08) 0%, transparent 100%);
+}
+.header-inner { max-width: 1200px; margin: 0 auto; }
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(124,58,237,0.15); border: 1px solid rgba(124,58,237,0.4);
+  color: #a78bfa; padding: 4px 12px; border-radius: 20px;
+  font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 1px;
+  margin-bottom: 16px;
+}
+.badge::before { content: '●'; font-size: 8px; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+h1 {
+  font-size: clamp(28px, 5vw, 52px);
+  font-weight: 800; line-height: 1.1;
+  background: linear-gradient(135deg, #fff 0%, #a78bfa 50%, #22d3ee 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.subtitle { color: var(--muted); font-size: 15px; margin-top: 8px; }
+
+/* ─── VERSION TABS ─── */
+.tabs-wrap {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(10,10,15,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+}
+.tabs {
+  max-width: 1200px; margin: 0 auto;
+  display: flex; gap: 4px; overflow-x: auto;
+}
+.tab {
+  padding: 16px 24px;
+  background: none; border: none;
+  color: var(--muted); cursor: pointer;
+  font-family: 'Space Mono', monospace; font-size: 12px;
+  white-space: nowrap; border-bottom: 2px solid transparent;
+  transition: all .2s; display: flex; align-items: center; gap: 8px;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); }
+.tab.v1.active { border-color: var(--v1); color: var(--v1); }
+.tab.v2.active { border-color: var(--v2); color: var(--v2); }
+.tab.v3.active { border-color: var(--v3); color: var(--v3); }
+.tab .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: currentColor; opacity: 0.6;
+}
+
+/* ─── MAIN LAYOUT ─── */
+main { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 32px; }
+
+.panel { display: none; }
+.panel.active { display: block; animation: fadeIn .3s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+/* ─── VERSION HERO ─── */
+.version-hero {
+  display: flex; align-items: center; gap: 16px;
+  padding: 20px 24px; border-radius: var(--radius);
+  margin-bottom: 28px; border: 1px solid;
+}
+.v1-hero { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.3); }
+.v2-hero { background: rgba(6,182,212,0.08);  border-color: rgba(6,182,212,0.3); }
+.v3-hero { background: rgba(124,58,237,0.08); border-color: rgba(124,58,237,0.3); }
+
+.version-num {
+  font-family: 'Space Mono', monospace;
+  font-size: 36px; font-weight: 700; opacity: 0.6; line-height: 1;
+}
+.v1-hero .version-num { color: var(--v1); }
+.v2-hero .version-num { color: var(--v2); }
+.v3-hero .version-num { color: var(--v3); }
+
+.version-title { font-size: 20px; font-weight: 700; }
+.version-desc  { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+
+.status-pill {
+  margin-left: auto; padding: 6px 14px; border-radius: 20px;
+  font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .5px;
+  white-space: nowrap;
+}
+.status-ok      { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+.status-loading { background: rgba(245,158,11,0.15); color: var(--v1);   border: 1px solid rgba(245,158,11,0.3); }
+.status-error   { background: rgba(239,68,68,0.15);  color: var(--red);  border: 1px solid rgba(239,68,68,0.3); }
+
+/* ─── GRID ─── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media(max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+/* ─── CARDS ─── */
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px;
+}
+.card-title {
+  font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--muted); font-family: 'Space Mono', monospace;
+  margin-bottom: 20px; display: flex; align-items: center; gap: 8px;
+}
+.card-title::before {
+  content: ''; width: 16px; height: 1px; background: var(--muted);
+}
+
+/* ─── CANVAS DRAW ─── */
+.canvas-container {
+  position: relative; display: flex; flex-direction: column;
+  align-items: center; gap: 16px;
+}
+canvas#drawCanvas {
+  background: #000; border-radius: 8px;
+  border: 2px solid var(--border);
+  cursor: crosshair; touch-action: none;
+  transition: border-color .2s;
+  width: 280px; height: 280px;
+}
+canvas#drawCanvas:active { border-color: var(--accent1); box-shadow: var(--glow1); }
+
+.canvas-actions {
+  display: flex; gap: 10px; width: 100%; justify-content: center;
+}
+.btn {
+  padding: 10px 20px; border-radius: 8px; border: none;
+  font-family: 'Space Mono', monospace; font-size: 12px;
+  cursor: pointer; transition: all .2s; letter-spacing: .5px;
+}
+.btn-primary {
+  background: var(--accent1); color: #fff;
+  box-shadow: 0 0 20px rgba(124,58,237,0.4);
+}
+.btn-primary:hover { background: #6d28d9; transform: translateY(-1px); }
+.btn-secondary {
+  background: var(--surface); color: var(--muted);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+
+/* Brush size */
+.brush-row { display: flex; align-items: center; gap: 12px; }
+.brush-row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  height: 4px; background: var(--border); border-radius: 2px; flex: 1;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--accent1); cursor: pointer;
+}
+
+/* ─── PREDICTION RESULT ─── */
+.result-box {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 200px;
+  border: 2px dashed var(--border); border-radius: 12px;
+  gap: 8px; transition: all .3s;
+}
+.result-box.has-result {
+  border-style: solid; border-color: var(--accent1);
+  background: rgba(124,58,237,0.05);
+}
+.result-digit {
+  font-size: 96px; font-weight: 800; line-height: 1;
+  background: linear-gradient(135deg, #fff 0%, #a78bfa 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.result-label { font-size: 12px; color: var(--muted); font-family: 'Space Mono', monospace; }
+.result-conf  { font-size: 24px; font-weight: 700; color: var(--green); }
+.result-placeholder { color: var(--muted); font-size: 14px; text-align: center; line-height: 1.6; }
+
+/* ─── BAR CHART ─── */
+.prob-chart { display: flex; flex-direction: column; gap: 8px; }
+.prob-row   { display: flex; align-items: center; gap: 10px; }
+.prob-digit {
+  font-family: 'Space Mono', monospace; font-size: 13px;
+  font-weight: 700; width: 20px; text-align: center;
+}
+.prob-bar-bg {
+  flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;
+}
+.prob-bar-fill {
+  height: 100%; border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent1), var(--accent2));
+  transition: width .6s cubic-bezier(.4,0,.2,1);
+  width: 0;
+}
+.prob-pct {
+  font-family: 'Space Mono', monospace; font-size: 11px;
+  color: var(--muted); width: 44px; text-align: right;
+}
+
+/* ─── INFO CARDS ─── */
+.info-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr));
+  gap: 12px; margin-top: 20px;
+}
+.info-stat { padding: 16px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); }
+.info-stat-val { font-size: 22px; font-weight: 700; color: var(--text); }
+.info-stat-lbl { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; margin-top: 4px; }
+
+/* ─── PORT CONFIG ─── */
+.port-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px; background: var(--surface); border-radius: 8px;
+  border: 1px solid var(--border); margin-bottom: 20px;
+}
+.port-row label { font-size: 12px; color: var(--muted); white-space: nowrap; font-family:'Space Mono',monospace; }
+.port-row input {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 6px; padding: 6px 12px;
+  font-family: 'Space Mono', monospace; font-size: 13px; width: 90px;
+}
+.port-row input:focus { outline: none; border-color: var(--accent1); }
+
+/* ─── CODE BLOCK ─── */
+.code-block {
+  background: #0d0d1a; border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px;
+  font-family: 'Space Mono', monospace; font-size: 12px;
+  color: #a78bfa; line-height: 1.7; overflow-x: auto;
+  margin-top: 16px;
+}
+.code-comment { color: #4a4a6a; }
+.code-cmd     { color: #22d3ee; }
+.code-string  { color: #fbbf24; }
+
+/* ─── LOADING OVERLAY ─── */
+.loading-overlay {
+  display: none; position: absolute; inset: 0;
+  background: rgba(10,10,15,0.7); border-radius: var(--radius);
+  backdrop-filter: blur(4px); align-items: center; justify-content: center;
+  z-index: 20;
+}
+.loading-overlay.show { display: flex; }
+.spinner {
+  width: 36px; height: 36px; border: 3px solid var(--border);
+  border-top-color: var(--accent1); border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── COMPARISON TABLE ─── */
+.compare-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+  margin-top: 16px;
+}
+.compare-table th, .compare-table td {
+  padding: 12px 16px; text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.compare-table th {
+  background: var(--surface); color: var(--muted);
+  font-family: 'Space Mono', monospace; font-size: 11px;
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.compare-table tr:hover td { background: rgba(255,255,255,0.02); }
+.chip {
+  display: inline-block; padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-family: 'Space Mono', monospace;
+}
+.chip-v1 { background: rgba(245,158,11,0.15); color: var(--v1); }
+.chip-v2 { background: rgba(6,182,212,0.15);  color: var(--v2); }
+.chip-v3 { background: rgba(124,58,237,0.15); color: var(--v3); }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header>
+  <div class="header-inner">
+    <div class="badge">SUBTEMA 31 &nbsp;·&nbsp; MNIST CLASSIFIER</div>
+    <h1>Clasificador de Dígitos<br>Manuscritos</h1>
+    <p class="subtitle">
+      3 versiones del mismo algoritmo KNN &nbsp;·&nbsp;
+      Dataset embebido / local / nube &nbsp;·&nbsp;
+      Interfaz HTML + Backend Python (Flask) en VS Code
+    </p>
+  </div>
+</header>
+
+<!-- ── TABS ── -->
+<div class="tabs-wrap">
+  <div class="tabs">
+    <button class="tab v1 active" onclick="showTab(1)">
+      <span class="dot"></span> V1 · Dataset Embebido
+    </button>
+    <button class="tab v2" onclick="showTab(2)">
+      <span class="dot"></span> V2 · Dataset Local
+    </button>
+    <button class="tab v3" onclick="showTab(3)">
+      <span class="dot"></span> V3 · Dataset en Nube
+    </button>
+    <button class="tab" onclick="showTab(4)">
+      <span class="dot" style="background:#64748b"></span> Comparativa
+    </button>
+  </div>
+</div>
+
+<!-- ── MAIN ── -->
+<main>
+
+<!-- PANEL 1: EMBEBIDO -->
+<div id="panel1" class="panel active">
+  <div class="version-hero v1-hero">
+    <div class="version-num">01</div>
+    <div>
+      <div class="version-title">Dataset Embebido en Código</div>
+      <div class="version-desc">
+        20 muestras (2 por dígito) escritas directamente como arrays en Python.
+        Resolución 8×8 px · KNN k=1 · Solo para prueba del algoritmo.
+      </div>
+    </div>
+    <div class="status-pill status-loading" id="status1">Conectando...</div>
+  </div>
+
+  <div class="port-row">
+    <label>PUERTO FLASK:</label>
+    <input type="number" id="port1" value="5001" onchange="conectar(1)">
+    <button class="btn btn-secondary" onclick="conectar(1)">Reconectar</button>
+    <span style="font-size:12px;color:var(--muted);flex:1">
+      Ejecutar: <code style="color:#fbbf24">python version1_embebido.py</code>
+    </span>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Dibuja un dígito</div>
+      <div class="canvas-container">
+        <canvas id="drawCanvas1" width="280" height="280"></canvas>
+        <div class="brush-row" style="width:280px">
+          <label>Grosor:</label>
+          <input type="range" id="brush1" min="8" max="40" value="20">
+        </div>
+        <div class="canvas-actions">
+          <button class="btn btn-primary" onclick="clasificar(1)">🔍 Clasificar</button>
+          <button class="btn btn-secondary" onclick="limpiar(1)">✕ Limpiar</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card" style="position:relative">
+        <div class="loading-overlay" id="loading1"><div class="spinner"></div></div>
+        <div class="card-title">Predicción</div>
+        <div class="result-box" id="result1">
+          <div class="result-placeholder">✏️ Dibuja un número<br>y presiona "Clasificar"</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Probabilidades por clase</div>
+        <div class="prob-chart" id="probs1"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:24px">
+    <div class="card-title">Información del Dataset</div>
+    <div class="info-grid">
+      <div class="info-stat"><div class="info-stat-val" id="v1-muestras">—</div><div class="info-stat-lbl">MUESTRAS</div></div>
+      <div class="info-stat"><div class="info-stat-val" id="v1-precision">—</div><div class="info-stat-lbl">PRECISIÓN TEST</div></div>
+      <div class="info-stat"><div class="info-stat-val">8×8</div><div class="info-stat-lbl">RESOLUCIÓN</div></div>
+      <div class="info-stat"><div class="info-stat-val">KNN k=1</div><div class="info-stat-lbl">ALGORITMO</div></div>
+      <div class="info-stat"><div class="info-stat-val">10</div><div class="info-stat-lbl">CLASES (0-9)</div></div>
+    </div>
+    <div class="code-block">
+      <span class="code-comment"># Instalar dependencias para V1</span><br>
+      <span class="code-cmd">pip install</span> <span class="code-string">flask numpy scikit-learn pillow</span><br><br>
+      <span class="code-comment"># Ejecutar el servidor (Visual Studio Code Terminal)</span><br>
+      <span class="code-cmd">python</span> version1_embebido.py<br><br>
+      <span class="code-comment"># El servidor corre en:</span><br>
+      <span class="code-string">http://localhost:5001</span>
+    </div>
+  </div>
+</div>
+
+<!-- PANEL 2: LOCAL -->
+<div id="panel2" class="panel">
+  <div class="version-hero v2-hero">
+    <div class="version-num">02</div>
+    <div>
+      <div class="version-title">Dataset Almacenado Localmente</div>
+      <div class="version-desc">
+        MNIST completo descargado UNA vez y guardado en ./datos_mnist/
+        Resolución 28×28 px · 10 000 muestras · KNN k=3 · Lee del disco en ejecuciones futuras.
+      </div>
+    </div>
+    <div class="status-pill status-loading" id="status2">Conectando...</div>
+  </div>
+
+  <div class="port-row">
+    <label>PUERTO FLASK:</label>
+    <input type="number" id="port2" value="5002" onchange="conectar(2)">
+    <button class="btn btn-secondary" onclick="conectar(2)">Reconectar</button>
+    <span style="font-size:12px;color:var(--muted);flex:1">
+      Ejecutar: <code style="color:#fbbf24">python version2_local.py</code>
+    </span>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Dibuja un dígito</div>
+      <div class="canvas-container">
+        <canvas id="drawCanvas2" width="280" height="280"></canvas>
+        <div class="brush-row" style="width:280px">
+          <label>Grosor:</label>
+          <input type="range" id="brush2" min="8" max="40" value="20">
+        </div>
+        <div class="canvas-actions">
+          <button class="btn btn-primary" onclick="clasificar(2)">🔍 Clasificar</button>
+          <button class="btn btn-secondary" onclick="limpiar(2)">✕ Limpiar</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card" style="position:relative">
+        <div class="loading-overlay" id="loading2"><div class="spinner"></div></div>
+        <div class="card-title">Predicción</div>
+        <div class="result-box" id="result2">
+          <div class="result-placeholder">✏️ Dibuja un número<br>y presiona "Clasificar"</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Probabilidades por clase</div>
+        <div class="prob-chart" id="probs2"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:24px">
+    <div class="card-title">Información del Dataset Local</div>
+    <div class="info-grid">
+      <div class="info-stat"><div class="info-stat-val" id="v2-muestras">—</div><div class="info-stat-lbl">MUESTRAS</div></div>
+      <div class="info-stat"><div class="info-stat-val" id="v2-precision">—</div><div class="info-stat-lbl">PRECISIÓN TEST</div></div>
+      <div class="info-stat"><div class="info-stat-val">28×28</div><div class="info-stat-lbl">RESOLUCIÓN</div></div>
+      <div class="info-stat"><div class="info-stat-val">KNN k=3</div><div class="info-stat-lbl">ALGORITMO</div></div>
+      <div class="info-stat"><div class="info-stat-val" id="v2-ruta">./datos_mnist/</div><div class="info-stat-lbl">RUTA LOCAL</div></div>
+    </div>
+    <div class="code-block">
+      <span class="code-comment"># Instalar dependencias para V2</span><br>
+      <span class="code-cmd">pip install</span> <span class="code-string">flask numpy scikit-learn pillow tensorflow</span><br><br>
+      <span class="code-comment"># Ejecutar (primera vez descarga ~11 MB)</span><br>
+      <span class="code-cmd">python</span> version2_local.py<br><br>
+      <span class="code-comment"># Dataset guardado en:</span><br>
+      <span class="code-string">./datos_mnist/mnist_local.npz</span><br>
+      <span class="code-comment"># Modelo en cache:</span><br>
+      <span class="code-string">./datos_mnist/modelo_knn.pkl</span>
+    </div>
+  </div>
+</div>
+
+<!-- PANEL 3: NUBE -->
+<div id="panel3" class="panel">
+  <div class="version-hero v3-hero">
+    <div class="version-num">03</div>
+    <div>
+      <div class="version-title">Dataset desde la Nube</div>
+      <div class="version-desc">
+        MNIST se obtiene en tiempo real desde Google Storage / OpenML API.
+        Sin almacenamiento local · 10 000 muestras en RAM · KNN k=3 · 3 fuentes de respaldo.
+      </div>
+    </div>
+    <div class="status-pill status-loading" id="status3">Conectando...</div>
+  </div>
+
+  <div class="port-row">
+    <label>PUERTO FLASK:</label>
+    <input type="number" id="port3" value="5003" onchange="conectar(3)">
+    <button class="btn btn-secondary" onclick="conectar(3)">Reconectar</button>
+    <span style="font-size:12px;color:var(--muted);flex:1">
+      Ejecutar: <code style="color:#fbbf24">python version3_nube.py</code>
+    </span>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Dibuja un dígito</div>
+      <div class="canvas-container">
+        <canvas id="drawCanvas3" width="280" height="280"></canvas>
+        <div class="brush-row" style="width:280px">
+          <label>Grosor:</label>
+          <input type="range" id="brush3" min="8" max="40" value="20">
+        </div>
+        <div class="canvas-actions">
+          <button class="btn btn-primary" onclick="clasificar(3)">🔍 Clasificar</button>
+          <button class="btn btn-secondary" onclick="limpiar(3)">✕ Limpiar</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card" style="position:relative">
+        <div class="loading-overlay" id="loading3"><div class="spinner"></div></div>
+        <div class="card-title">Predicción</div>
+        <div class="result-box" id="result3">
+          <div class="result-placeholder">✏️ Dibuja un número<br>y presiona "Clasificar"</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Probabilidades por clase</div>
+        <div class="prob-chart" id="probs3"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:24px">
+    <div class="card-title">Información de la Fuente Cloud</div>
+    <div class="info-grid">
+      <div class="info-stat"><div class="info-stat-val" id="v3-muestras">—</div><div class="info-stat-lbl">MUESTRAS</div></div>
+      <div class="info-stat"><div class="info-stat-val" id="v3-precision">—</div><div class="info-stat-lbl">PRECISIÓN TEST</div></div>
+      <div class="info-stat"><div class="info-stat-val">28×28</div><div class="info-stat-lbl">RESOLUCIÓN</div></div>
+      <div class="info-stat"><div class="info-stat-val">KNN k=3</div><div class="info-stat-lbl">ALGORITMO</div></div>
+      <div class="info-stat"><div class="info-stat-val" id="v3-fuente" style="font-size:11px">—</div><div class="info-stat-lbl">FUENTE CLOUD</div></div>
+    </div>
+    <div class="code-block">
+      <span class="code-comment"># Instalar dependencias para V3</span><br>
+      <span class="code-cmd">pip install</span> <span class="code-string">flask numpy scikit-learn pillow requests tensorflow</span><br><br>
+      <span class="code-comment"># Ejecutar (descarga dataset en RAM desde internet)</span><br>
+      <span class="code-cmd">python</span> version3_nube.py<br><br>
+      <span class="code-comment"># Fuentes en la nube (por orden de prioridad):</span><br>
+      <span class="code-string">1. Google Storage (TensorFlow mirror)</span><br>
+      <span class="code-string">2. TensorFlow/Keras API</span><br>
+      <span class="code-string">3. OpenML API (openml.org)</span>
+    </div>
+  </div>
+</div>
+
+<!-- PANEL 4: COMPARATIVA -->
+<div id="panel4" class="panel">
+  <div class="version-hero" style="background:rgba(100,116,139,0.08);border-color:rgba(100,116,139,0.3)">
+    <div class="version-num" style="color:#64748b">★</div>
+    <div>
+      <div class="version-title">Comparativa de las 3 Versiones</div>
+      <div class="version-desc">Análisis técnico: diferencias en dataset, almacenamiento, precisión y velocidad.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Tabla Comparativa</div>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Característica</th>
+          <th><span class="chip chip-v1">V1 Embebido</span></th>
+          <th><span class="chip chip-v2">V2 Local</span></th>
+          <th><span class="chip chip-v3">V3 Nube</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Origen del dataset</td><td>Código Python</td><td>Disco duro local</td><td>Internet (nube)</td></tr>
+        <tr><td>Muestras de entrenamiento</td><td>~16 (simulación)</td><td>10 000</td><td>10 000</td></tr>
+        <tr><td>Resolución de imagen</td><td>8 × 8 px</td><td>28 × 28 px</td><td>28 × 28 px</td></tr>
+        <tr><td>Algoritmo</td><td>KNN k=1</td><td>KNN k=3</td><td>KNN k=3</td></tr>
+        <tr><td>Precisión esperada</td><td>~60–80%</td><td>~95–97%</td><td>~95–97%</td></tr>
+        <tr><td>Requiere internet</td><td>❌ No</td><td>⚠️ Solo 1ª vez</td><td>✅ Siempre</td></tr>
+        <tr><td>Almacenamiento en disco</td><td>0 MB</td><td>~15 MB</td><td>0 MB</td></tr>
+        <tr><td>Tiempo de inicio</td><td>⚡ Instantáneo</td><td>🐢 Lento (1ª vez)</td><td>🌐 Depende de red</td></tr>
+        <tr><td>Puerto</td><td>5001</td><td>5002</td><td>5003</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-top:24px">
+    <div class="card-title">Guía Rápida de Uso en VS Code</div>
+    <div class="code-block">
+<span class="code-comment"># 1. Abrir 3 terminales en VS Code (Terminal > New Terminal)</span><br>
+<span class="code-comment"># Terminal 1</span>
+<span class="code-cmd">python</span> <span class="code-string">version1_embebido.py</span><br>
+<span class="code-comment"># Terminal 2</span>
+<span class="code-cmd">python</span> <span class="code-string">version2_local.py</span><br>
+<span class="code-comment"># Terminal 3</span>
+<span class="code-cmd">python</span> <span class="code-string">version3_nube.py</span><br>
+<span class="code-comment"># 2. Abrir index.html con Live Server o doble clic</span>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+// ══════ CANVAS SETUP ══════
+const canvases = {};
+const ctxs = {};
+
+[1, 2, 3].forEach(v => {
+  const c = document.getElementById(`drawCanvas${v}`);
+  canvases[v] = c;
+  const ctx = c.getContext('2d');
+  ctxs[v] = ctx;
+
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, 280, 280);
+  ctx.strokeStyle = '#fff';
+  ctx.lineJoin = 'round';
+  ctx.lineCap  = 'round';
+
+  let drawing = false;
+
+  const getPos = (e, rect) => {
+    const src = e.touches ? e.touches[0] : e;
+    return {
+      x: (src.clientX - rect.left) * (280 / rect.width),
+      y: (src.clientY - rect.top)  * (280 / rect.height)
+    };
+  };
+
+  const startDraw = e => {
+    e.preventDefault(); drawing = true;
+    const rect = c.getBoundingClientRect();
+    const pos = getPos(e, rect);
+    ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+  };
+  const moveDraw = e => {
+    e.preventDefault();
+    if (!drawing) return;
+    ctx.lineWidth = +document.getElementById(`brush${v}`).value;
+    const rect = c.getBoundingClientRect();
+    const pos = getPos(e, rect);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+  };
+  const stopDraw = () => { drawing = false; };
+
+  c.addEventListener('mousedown',  startDraw);
+  c.addEventListener('mousemove',  moveDraw);
+  c.addEventListener('mouseup',    stopDraw);
+  c.addEventListener('mouseleave', stopDraw);
+  c.addEventListener('touchstart', startDraw, {passive:false});
+  c.addEventListener('touchmove',  moveDraw,  {passive:false});
+  c.addEventListener('touchend',   stopDraw);
+});
+
+function limpiar(v) {
+  ctxs[v].fillStyle = '#000';
+  ctxs[v].fillRect(0, 0, 280, 280);
+  document.getElementById(`result${v}`).classList.remove('has-result');
+  document.getElementById(`result${v}`).innerHTML =
+    '<div class="result-placeholder">✏️ Dibuja un número<br>y presiona "Clasificar"</div>';
+  document.getElementById(`probs${v}`).innerHTML = '';
+}
+
+// ══════ TABS ══════
+function showTab(n) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`panel${n}`).classList.add('active');
+  document.querySelectorAll('.tab')[n-1].classList.add('active');
+}
+
+// ══════ CONEXIÓN ══════
+const serverInfo = { 1: null, 2: null, 3: null };
+
+async function conectar(v) {
+  const port = document.getElementById(`port${v}`).value;
+  const pill = document.getElementById(`status${v}`);
+  pill.textContent = 'Conectando...';
+  pill.className = 'status-pill status-loading';
+
+  try {
+    const r = await fetch(`http://localhost:${port}/info`, { signal: AbortSignal.timeout(4000) });
+    if (!r.ok) throw new Error();
+    const info = await r.json();
+    serverInfo[v] = { port, ...info };
+    pill.textContent = '✓ Conectado';
+    pill.className = 'status-pill status-ok';
+
+    if (v === 1) {
+      document.getElementById('v1-muestras').textContent  = info.muestras;
+      document.getElementById('v1-precision').textContent = (info.precision * 100).toFixed(1) + '%';
+    } else if (v === 2) {
+      document.getElementById('v2-muestras').textContent  = info.muestras?.toLocaleString();
+      document.getElementById('v2-precision').textContent = (info.precision * 100).toFixed(1) + '%';
+    } else {
+      document.getElementById('v3-muestras').textContent  = info.muestras?.toLocaleString();
+      document.getElementById('v3-precision').textContent = (info.precision * 100).toFixed(1) + '%';
+      const f = document.getElementById('v3-fuente');
+      if (f) f.textContent = info.fuente_nube || '—';
+    }
+  } catch {
+    pill.textContent = '✗ Sin conexión';
+    pill.className = 'status-pill status-error';
+  }
+}
+
+setTimeout(() => { [1,2,3].forEach(conectar); }, 500);
+setInterval(() => { [1,2,3].forEach(v => !serverInfo[v] && conectar(v)); }, 8000);
+
+// ══════ CLASIFICAR ══════
+async function clasificar(v) {
+  const info = serverInfo[v];
+  if (!info) {
+    alert(`⚠️ Versión ${v} no conectada. Verifica que el servidor Python esté corriendo en puerto ${document.getElementById(`port${v}`).value}`);
+    return;
+  }
+
+  const imagen = canvases[v].toDataURL('image/png');
+  document.getElementById(`loading${v}`).classList.add('show');
+
+  try {
+    const r = await fetch(`http://localhost:${info.port}/predecir`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imagen }),
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+
+    const resBox = document.getElementById(`result${v}`);
+    resBox.classList.add('has-result');
+    resBox.innerHTML = `
+      <div class="result-digit">${data.prediccion}</div>
+      <div class="result-conf">${data.confianza}%</div>
+      <div class="result-label">CONFIANZA</div>
+    `;
+
+    document.getElementById(`probs${v}`).innerHTML =
+      data.probabilidades.map((p, i) => `
+        <div class="prob-row">
+          <span class="prob-digit" style="color:${i===data.prediccion?'#a78bfa':'var(--muted)'}">${i}</span>
+          <div class="prob-bar-bg">
+            <div class="prob-bar-fill" style="width:${(p*100).toFixed(1)}%${i===data.prediccion?';background:linear-gradient(90deg,#7c3aed,#22d3ee)':''}"></div>
+          </div>
+          <span class="prob-pct">${(p*100).toFixed(1)}%</span>
+        </div>
+      `).join('');
+
+  } catch (e) {
+    alert('Error al clasificar: ' + e.message);
+  } finally {
+    document.getElementById(`loading${v}`).classList.remove('show');
+  }
+}
+</script>
+</body>
+</html>
